@@ -1,0 +1,7 @@
+name: nlm-ckn-mcp
+channels:
+  - conda-forge
+dependencies:
+  # Python dependencies
+  - mcp
+  - requests
