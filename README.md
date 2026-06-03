@@ -17,7 +17,7 @@ Python MCP server that exposes search tools for the public NLM Cell Knowledge Ne
 git clone https://github.com/NIH-NLM/NLM-CKN-MCP.git
 conda env create -f environment.yml
 conda activate nlm-ckn-mcp
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ## MCP client config example
