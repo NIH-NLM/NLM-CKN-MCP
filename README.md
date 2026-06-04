@@ -9,6 +9,9 @@ Python MCP server that exposes search tools for the public NLM Cell Knowledge Ne
 
 - `search_cell_kn`: Search Cell-KN (`phenotypes` or `ontologies`) and return compact results.
 - `get_cell_kn_search_defaults`: Return the default search fields used by this server.
+- `list_cell_kn_collections`: List the available graph collections (ontology prefixes).
+- `get_cell_kn_neighbors`: Traverse the graph from a node `_id` to its related nodes and links.
+- `get_cell_kn_node`: Fetch a single node's full record by `_id`.
 
 ## Quick start
 
@@ -56,6 +59,7 @@ Recommended (works reliably in Claude Desktop and other clients that do not inhe
       ]
     }
   }
+}
 ```
 
 ## What is happening?
