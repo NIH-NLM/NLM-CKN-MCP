@@ -20,7 +20,7 @@ Python MCP server that exposes search tools for the public NLM Cell Knowledge Ne
 git clone https://github.com/NIH-NLM/NLM-CKN-MCP.git
 conda env create -f environment.yml
 conda activate nlm-ckn-mcp
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ## MCP client config example
@@ -52,7 +52,7 @@ Recommended (works reliably in Claude Desktop and other clients that do not inhe
 {
   "mcpServers": {
     "NLM-CKN": {
-      "command": "/Users/adeslatt/miniforge3/envs/nlm-ckn-mcp/bin/python",
+      "command": "/Users/**[username]**/miniforge3/envs/nlm-ckn-mcp/bin/python",
       "args": [
         "-m",
 	"cell_kg_mcp"
@@ -64,12 +64,13 @@ Recommended (works reliably in Claude Desktop and other clients that do not inhe
 
 ## What is happening?
 
+```bash
 You (in Claude Desktop)
       │  "search for T cells"
       ▼
 Claude decides to use a tool  ──►  server.py  ──►  client.py  ──►  https://cell-kn.org
       ◄──────────────────────────  results  ◄──  raw data  ◄──────  (the real website)
-
+```
  the actual MCP server. It wraps the client and announces tools to Claude:
 
 ## The MCP src pattern
@@ -136,7 +137,7 @@ Claude Desktop launches it for you.
 That's what the config block in the README does:
 
 "NLM-CKN": {
-  "command": "/Users/adeslatt/miniforge3/envs/nlm-ckn-mcp/bin/python",
+  "command": "/Users/**[username]**/miniforge3/envs/nlm-ckn-mcp/bin/python",
   "args": ["-m", "cell_kg_mcp"]
 }
 
@@ -151,16 +152,26 @@ That's also why the README is so insistent about the absolute path to Python:
 
 Claude Desktop doesn't know about your conda environment, so you have to spell out exactly which Python has the mcp and requests libraries installed.
 
-###  "what to do to set it up" 
+###  What to do to set it up?
 
-boils down to:
-* Install it into a conda env (the conda env create + pip install -e ".[dev]" steps).
-* Tell Claude Desktop about it by editing claude_desktop_config.json with the absolute path to that env's Python (the JSON block above).
+Boils down to:
+* Install it into a conda env
+
+```bash
+conda env create -f environment.yml
+pip install -e .
+```
+
+* Tell Claude Desktop about it by editing `claude_desktop_config.json` with the `absolute path` to that `env's Python (the JSON block above)`.
 * Restart Claude Desktop. 
 
 It launches the server, sees the two tools, and you're done.
 
 Test the plumbing independently with pytest — those tests in test_client.py fake the website and check the client builds the right request, so you can confirm the logic without hitting the network.
+
+### Final note
+
+Replace [username] with your [username]!
 
 ## Notes about the live endpoint
 
