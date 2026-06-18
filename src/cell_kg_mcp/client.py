@@ -41,7 +41,7 @@ EDGE_DIRECTIONS = ("ANY", "OUTBOUND", "INBOUND")
 class CellKgSearchClient:
     """Simple client for the cell-kn.org Arango search endpoint."""
 
-    base_url: str = "https://cell-kn.org"
+    base_url: str = "https://stage.nlm-ckn.org/"
     timeout_seconds: float = 20.0
 
     def _endpoint(self) -> str:
