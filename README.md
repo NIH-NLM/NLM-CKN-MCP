@@ -2,7 +2,7 @@
 
 Python MCP server that exposes search tools for the public NLM Cell Knowledge Network site:
 
-- Website: <https://cell-kn.org/>
+- Website: <https://nlm-ckn>
 - Search endpoint used by the web app: `POST /arango_api/search/`
 
 ## What this server provides
