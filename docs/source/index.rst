@@ -1,5 +1,3 @@
-NLM-CKN MCP Server
-==================
 
 A small **MCP (Model Context Protocol) server** that gives Claude a safe,
 curated set of tools for searching and exploring the **NLM Cell Knowledge
@@ -64,28 +62,26 @@ A typical flow: **search** for a term to get an ``_id``, then ask for its
 
 Installation (developers)
 -------------------------
+nlm-ckn-mcp Documentation
+
+Python MCP server that exposes search and graph-traversal tools for the
+NLM Cell Knowledge Network.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference:
+
+   modules
+
+Installation
+------------
 
 .. code-block:: bash
 
    pip install -e .
 
-See the project ``README`` for hosting the server on the web and for the local
-Claude Desktop setup.
-
-
-API reference
--------------
-
-The pages below are generated automatically from the code's docstrings.
-
-.. toctree::
-   :maxdepth: 2
-
-   modules
-
 
 Indices and tables
--------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
