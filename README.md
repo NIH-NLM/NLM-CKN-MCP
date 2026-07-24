@@ -62,6 +62,96 @@ Recommended (works reliably in Claude Desktop and other clients that do not inhe
 }
 ```
 
+## Two ways to run this server
+
+The **same code** works two completely separate ways, chosen at startup. They do
+not interfere — a Desktop user and a web user can both use it at once.
+
+| | **A. Local (Claude Desktop / Claude Code)** | **B. Web (claude.ai in a browser)** |
+|---|---|---|
+| Who installs what | Each user installs Python + this repo | **Nothing** — just paste a URL |
+| Where the server runs | On the user's own laptop | On a host you set up once (Render, AWS, …) |
+| Transport | stdio (the default) | Streamable HTTP (`MCP_TRANSPORT=http`) |
+| Best for | Developers, a single machine | Non-technical users, many people |
+
+Section **A** is the Claude Desktop config shown above (nothing about it changes).
+Sections **B** below cover the web option.
+
+## Web hosting on Render (for the maintainer)
+
+The web option needs the server running somewhere with a public HTTPS address.
+The repo ships a `render.yaml` blueprint so [Render](https://render.com) can host
+it in a few clicks. (Any host works — Render is just the simplest starting point.
+The identical code can later move to an NIH STRIDES / AWS instance by running it
+with `MCP_TRANSPORT=http`.)
+
+**Cost:** Render's **Free** plan is `$0`, but the server *sleeps* after ~15 min
+idle (the first request afterward takes 30–60s to wake). For always-on, change
+`plan: free` to `plan: starter` (~$7/month) in `render.yaml`. Nothing else changes.
+
+**One-time deploy steps:**
+
+1. Make sure the repo is pushed to GitHub (Render deploys *from* GitHub):
+   ```bash
+   git add render.yaml pyproject.toml src/cell_kg_mcp/server.py
+   git commit -m "Add web (Streamable HTTP) mode + Render blueprint"
+   git push
+   ```
+2. Go to **render.com** → **Get Started** → **Sign in with GitHub** (authorize
+   access to the `NIH-NLM` repositories).
+3. Click **New +** (top-right) → **Blueprint**.
+4. Choose the **`NLM-CKN-MCP`** repository → **Connect**.
+5. Render reads `render.yaml` and shows a service named **`nlm-ckn-mcp`** on the
+   **Free** plan → click **Apply** (or **Create**).
+6. Wait ~2–3 minutes for the first build. The log ends with `Uvicorn running on …`.
+7. At the top of the service page you'll see its address, e.g.
+   `https://nlm-ckn-mcp.onrender.com`.
+8. **The MCP address is that URL with `/mcp` on the end:**
+   ```
+   https://nlm-ckn-mcp.onrender.com/mcp
+   ```
+   Give that `/mcp` URL to your users (next section).
+
+**Check it's live** (optional, from any terminal):
+
+```bash
+curl -sS -X POST https://nlm-ckn-mcp.onrender.com/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0.0"}}}'
+```
+
+A response containing `"serverInfo":{"name":"cell-kg-search"…}` means it works.
+(On the free plan the very first call after idle may take ~30–60s.)
+
+## Adding the connector in claude.ai (for NIH users — no install)
+
+Once the server is hosted and you have its `/mcp` URL, anyone can use it from
+**claude.ai in a browser** — no Python, no config files, no Claude Desktop.
+
+1. Open **[claude.ai](https://claude.ai)** and sign in.
+2. Click your initials (bottom-left) → **Settings**.
+3. Go to **Connectors** → **Add custom connector**.
+4. Give it a name (e.g. `NLM-CKN`) and paste the URL your maintainer gave you:
+   ```
+   https://nlm-ckn-mcp.onrender.com/mcp
+   ```
+   → **Add**.
+5. Start a new chat and ask, for example:
+   > Search Cell-KN for "T cell" and show me the top results.
+
+   The first time, Claude asks permission to use the connector — allow it.
+
+**Requirements / gotchas:**
+
+- Custom connectors require a **paid Claude plan** (Pro, Team, or Enterprise).
+- On a **Team/Enterprise** organization, an **admin may need to enable custom
+  connectors** before the option appears. If you don't see *Add custom connector*,
+  ask your Claude workspace admin.
+- On the **free Render tier**, the first request after the server has been idle
+  takes ~30–60s while it wakes up; later requests are fast. Upgrade to
+  `plan: starter` to remove this.
+
 ## What is happening?
 
 ```bash
@@ -187,6 +277,29 @@ Replace [username] with your [username]!
 - Error sequence: `write EPIPE` right after initialize
   - Usually a follow-on error because the server process failed to spawn or exited early.
   - Fix: switch to absolute command + `cwd`, then restart the MCP client.
+
+## Documentation
+
+API documentation is generated automatically from the code's docstrings with
+**Sphinx** (autodoc), following the same model as
+[`oadr-cpep`](https://github.com/NIH-NLM/oadr-cpep). On every push to `main`, the
+`.github/workflows/docs.yml` workflow builds the HTML and publishes it to
+**GitHub Pages**:
+
+- Published site: <https://nih-nlm.github.io/NLM-CKN-MCP/>
+
+One-time setup (repo admin): in the GitHub repo, go to **Settings → Pages** and
+set **Source: GitHub Actions**. After that, docs rebuild and redeploy on their own.
+
+Build the docs locally:
+
+```bash
+pip install -e .
+pip install sphinx myst-parser sphinx-rtd-theme
+sphinx-apidoc -f --separate -o docs/source/ src/cell_kg_mcp
+cd docs && make html
+# open docs/build/html/index.html
+```
 
 ## Run tests
 

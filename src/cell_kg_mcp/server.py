@@ -129,7 +129,24 @@ def get_cell_kn_node(node_id: str, include_raw: bool = False) -> dict[str, Any]:
     return out
 
 def main() -> None:
-    mcp.run()
+    """Run the MCP server.
+
+    Transport is chosen by the MCP_TRANSPORT env var:
+      - unset / "stdio"  -> local stdio (Claude Desktop, Claude Code). Default.
+      - "http"           -> Streamable HTTP for remote/web hosting (claude.ai).
+                            Serves the MCP endpoint at /mcp on HOST:PORT.
+                            HOST defaults to 0.0.0.0; PORT defaults to 8000
+                            (cloud hosts like Render/Railway inject PORT).
+    """
+    import os
+
+    transport = os.environ.get("MCP_TRANSPORT", "stdio").strip().lower()
+    if transport in ("http", "streamable-http"):
+        mcp.settings.host = os.environ.get("HOST", "0.0.0.0")
+        mcp.settings.port = int(os.environ.get("PORT", "8000"))
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":

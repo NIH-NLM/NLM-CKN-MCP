@@ -1,0 +1,32 @@
+# Render Blueprint — deploys the NLM-CKN MCP server as a public web service.
+#
+# Render reads this file automatically when you create a new service from the
+# repo via  New → Blueprint.  It sets everything up for you; you don't type any
+# settings by hand.
+#
+# What it does:
+#   - Runs the SAME server code, in web mode (MCP_TRANSPORT=http).
+#   - Render injects a PORT; the server reads it and listens on 0.0.0.0:$PORT.
+#   - Your MCP address becomes:  https://<service-name>.onrender.com/mcp
+#
+# Cost:
+#   - plan: free  -> $0, but the server SLEEPS after ~15 min idle (30–60s wake-up).
+#   - For always-on, change  plan: free  to  plan: starter  (~$7/month). Nothing
+#     else changes.
+#
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: nlm-ckn-mcp
+    runtime: python
+    plan: free
+    buildCommand: "pip install -e ."
+    startCommand: "python -m cell_kg_mcp"
+    envVars:
+      # Selects web mode. Without this the server would run in local stdio mode
+      # (the Claude Desktop path), which does not listen on a port.
+      - key: MCP_TRANSPORT
+        value: http
+      # Pin the Python version so cloud builds match local. Adjust if needed.
+      - key: PYTHON_VERSION
+        value: "3.12.11"
