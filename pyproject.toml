@@ -9,7 +9,8 @@ description = "MCP server for searching the NLM Cell Knowledge Network (NLM-CKN)
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "mcp>=1.2.0",
+  # >=1.10 guarantees the Streamable HTTP transport used for remote/web hosting.
+  "mcp>=1.10.0",
   "requests>=2.31.0",
 ]
 

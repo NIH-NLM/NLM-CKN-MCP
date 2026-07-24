@@ -1,0 +1,120 @@
+/* ============================================================================
+   NLM-CKN — per-tissue knowledge-base summary
+   Grouped on the INPUT anatomical structure (CSD.anatomical_structure) = the
+   original 10 organs. No UBERON sub-part traversal, so atlas datasets are NOT
+   double-counted and rows sum to the curated dataset total (e.g. 84).
+
+   Run in the ArangoDB workspace query editor / arangosh / _api/cursor.
+   Bind var:  { "graph": "<your named graph>" }
+   (If you don't use a named graph, replace `GRAPH @graph` with an explicit
+    edge-collection list, e.g.  `CSD-PUB, CS-CSD, CS-UBERON, ...` .)
+
+   Edge directions verified against the loaded graph:
+     CSD -[WASATTRIBUTEDTO]-> PUB     dataset  -> publication   (OUTBOUND from CSD)
+     CS  -[MEMBER_OF]->       CSD     cell set -> dataset       (INBOUND  to  CSD)
+     CS  -[DERIVES_FROM]->    UBERON  cell set -> tissue
+   disease_status is a STRING FIELD on CSD (e.g. "normal"), NOT a MONDO node.
+
+   NOTE on grouping: if this returns MORE than 10 rows, the loaded CSDs carry
+   the *specific* tissue (e.g. "lung") rather than the organ bucket
+   ("respiratory system"). In that case add a normalization map — see the
+   commented block at the bottom.
+   ============================================================================ */
+
+
+/* ---- Query A — datasets, publications, cell sets, diseases (solid) -------- */
+FOR d IN CSD
+  COLLECT tissue = d.anatomical_structure INTO grp = d
+  LET datasets = LENGTH(grp)
+  LET publications = LENGTH(UNIQUE(
+      FOR ds IN grp
+        FOR p IN 1..1 OUTBOUND ds._id GRAPH @graph
+          FILTER IS_SAME_COLLECTION('PUB', p)
+          RETURN p._id))
+  LET cell_sets = LENGTH(UNIQUE(
+      FOR ds IN grp
+        FOR c IN 1..1 INBOUND ds._id GRAPH @graph
+          FILTER IS_SAME_COLLECTION('CS', c)
+          RETURN c._id))
+  LET diseases = LENGTH(UNIQUE(grp[*].disease_status))                 /* includes "normal" */
+  LET diseases_excl_normal = LENGTH(UNIQUE(
+      grp[* FILTER CURRENT.disease_status != 'normal'].disease_status))
+  SORT tissue
+  RETURN {
+    tissue, datasets, publications, cell_sets,
+    diseases, diseases_excl_normal
+  }
+
+
+/* ============================================================================
+   Query B — compounds per tissue.
+   Compounds (CHEMBL / CHEBI) are NOT attached to datasets or cell sets
+   directly; they sit in the gene/protein layer. Run the ONE-TIME diagnostic
+   first to learn the real hop path, then set the depth range in the aggregate.
+   ============================================================================ */
+
+/* B0 — diagnostic: how does a compound connect? (run once, read the shape) */
+// LET seed = FIRST(FOR x IN CHEMBL LIMIT 1 RETURN x._id)
+// FOR v, e, p IN 1..3 ANY seed GRAPH @graph
+//   RETURN DISTINCT {
+//     hop:   LENGTH(p.edges),
+//     from:  PARSE_IDENTIFIER(e._from).collection,
+//     label: e.Label,
+//     to:    PARSE_IDENTIFIER(e._to).collection }
+
+/* B1 — compounds per tissue (TEMPLATE — tune the 2..4 range to the path B0 shows).
+        This can be expensive; add LIMITs while testing. */
+// FOR d IN CSD
+//   COLLECT tissue = d.anatomical_structure INTO grp = d
+//   LET compounds = LENGTH(UNIQUE(
+//       FOR ds IN grp
+//         FOR c IN 1..1 INBOUND ds._id GRAPH @graph FILTER IS_SAME_COLLECTION('CS', c)
+//           FOR cmp IN 2..4 ANY c._id GRAPH @graph
+//             OPTIONS { uniqueVertices: 'global', bfs: true }
+//             FILTER IS_SAME_COLLECTION('CHEMBL', cmp) OR IS_SAME_COLLECTION('CHEBI', cmp)
+//             RETURN cmp._id))
+//   SORT tissue
+//   RETURN { tissue, compounds }
+
+
+/* ============================================================================
+   Query C — total nodes / total edges per tissue (induced data subgraph).
+   Definition matters: this walks OUT from each tissue's datasets across the
+   data fabric and PRUNES at the ontology backbone (UBERON/GO/CL/MONDO) so the
+   whole ontology tree isn't counted into every tissue. Drop the PRUNE line if
+   Richard wants the ontology backbone included (totals will then overlap
+   heavily across tissues). Tune the 0..4 depth to reach the layers you count.
+   ============================================================================ */
+// FOR d IN CSD
+//   COLLECT tissue = d.anatomical_structure INTO grp = d
+//   LET sub = (
+//     FOR ds IN grp
+//       FOR v, e IN 0..4 ANY ds._id GRAPH @graph
+//         OPTIONS { uniqueVertices: 'global', uniqueEdges: 'global', bfs: true }
+//         PRUNE IS_SAME_COLLECTION('UBERON', v) OR IS_SAME_COLLECTION('GO', v)
+//            OR IS_SAME_COLLECTION('CL', v)     OR IS_SAME_COLLECTION('MONDO', v)
+//         RETURN { v: v._id, e: e ? e._id : null })
+//   LET total_nodes = LENGTH(UNIQUE(sub[*].v))
+//   LET total_edges = LENGTH(UNIQUE(sub[* FILTER CURRENT.e != null].e))
+//   SORT tissue
+//   RETURN { tissue, total_nodes, total_edges }
+
+
+/* ============================================================================
+   Optional — collapse specific tissues into the 10 organ buckets, if Query A
+   returned more than 10 rows. Fill in the map for whatever specific values you
+   see (left = CSD.anatomical_structure value, right = organ bucket), then
+   COLLECT on `bucket` instead of `tissue`.
+   ============================================================================ */
+// LET organ_map = {
+//   "lung": "respiratory system", "trachea": "respiratory system", "nose": "respiratory system",
+//   "bone marrow": "bone marrow",  "kidney": "kidney", "liver": "liver", "pancreas": "pancreas",
+//   "retina": "retina", "skin of body": "skin of body", "heart": "heart plus pericardium",
+//   "neocortex": "neocortex", "digestive tract": "digestive tract"
+//   /* ...add any others that appear... */
+// }
+// FOR d IN CSD
+//   LET bucket = organ_map[d.anatomical_structure] || d.anatomical_structure
+//   COLLECT tissue = bucket WITH COUNT INTO datasets
+//   SORT tissue
+//   RETURN { tissue, datasets }
