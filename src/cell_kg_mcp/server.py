@@ -142,8 +142,33 @@ def main() -> None:
 
     transport = os.environ.get("MCP_TRANSPORT", "stdio").strip().lower()
     if transport in ("http", "streamable-http"):
+        from mcp.server.transport_security import TransportSecuritySettings
+
         mcp.settings.host = os.environ.get("HOST", "0.0.0.0")
         mcp.settings.port = int(os.environ.get("PORT", "8000"))
+
+        # FastMCP auto-enables DNS-rebinding protection with a LOCALHOST-only
+        # allow-list (it's constructed while host is still 127.0.0.1). Behind a
+        # managed HTTPS host (Render/AWS) the incoming Host header is the public
+        # domain, which that policy rejects with HTTP 421 "Invalid Host header".
+        # Override it here:
+        #   - MCP_ALLOWED_HOSTS set  -> keep protection on, trust those hosts
+        #     (comma-separated, e.g. "nlm-ckn-mcp.onrender.com").
+        #   - unset (default)        -> disable it; safe here because the server
+        #     is public, read-only, and sits behind the host's HTTPS proxy.
+        allowed = os.environ.get("MCP_ALLOWED_HOSTS", "").strip()
+        if allowed:
+            hosts = [h.strip() for h in allowed.split(",") if h.strip()]
+            mcp.settings.transport_security = TransportSecuritySettings(
+                enable_dns_rebinding_protection=True,
+                allowed_hosts=hosts,
+                allowed_origins=[f"https://{h}" for h in hosts],
+            )
+        else:
+            mcp.settings.transport_security = TransportSecuritySettings(
+                enable_dns_rebinding_protection=False
+            )
+
         mcp.run(transport="streamable-http")
     else:
         mcp.run()

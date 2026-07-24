@@ -1,118 +1,132 @@
-# NLM-CKN
+# NLM-CKN MCP Server
 
-Python MCP server that exposes search tools for the public NLM Cell Knowledge Network site:
+A small **MCP (Model Context Protocol) server** that gives Claude a safe, curated
+set of tools for searching and exploring the **NLM Cell Knowledge Network
+(NLM-CKN)** — the cell-type knowledge graph behind <https://nlm-ckn.org>.
 
-- Website: <https://nlm-ckn>
-- Search endpoint used by the web app: `POST /arango_api/search/`
+You ask Claude a question in plain English ("What T cell subtypes are in the
+graph, and what are they related to?") and Claude uses these tools to search the
+knowledge graph and walk its connections for you.
 
-## What this server provides
+- **Documentation site:** <https://nih-nlm.github.io/NLM-CKN-MCP/>
+- **Hosted server (MCP endpoint):** `https://nlm-ckn-mcp.onrender.com/mcp`
 
-- `search_cell_kn`: Search Cell-KN (`phenotypes` or `ontologies`) and return compact results.
-- `get_cell_kn_search_defaults`: Return the default search fields used by this server.
-- `list_cell_kn_collections`: List the available graph collections (ontology prefixes).
-- `get_cell_kn_neighbors`: Traverse the graph from a node `_id` to its related nodes and links.
-- `get_cell_kn_node`: Fetch a single node's full record by `_id`.
+---
 
-## Quick start
+## For NIH users — use it in your browser (no install)
 
+This is the path for everyone who just wants to *use* the tools. **Nothing to
+install, no Python, no Claude Desktop** — it works in the browser at
+[claude.ai](https://claude.ai).
 
-```bash
-git clone https://github.com/NIH-NLM/NLM-CKN-MCP.git
-conda env create -f environment.yml
-conda activate nlm-ckn-mcp
-pip install -e .
-```
+1. Open **[claude.ai](https://claude.ai)** and sign in.
+2. Click your initials (bottom-left) → **Settings**.
+3. Go to **Connectors** → **Add custom connector**.
+4. Give it a name — `NLM-CKN` — and paste this address:
 
-## MCP client config example
-
-On the mac, the Claude configuration file is called `claude_desktop_config.json`.
-
-It is found here:
-```bash
-ls ~/Library/Application\ Support/Claude/claude_desktop_config.json
-```
-
-Choose your best terminal editor, I use `emacs`, `vi` exists without any install.
-
-I used `homebrew` to `brew install` emacs since I use it in all my environments.
-
-If you don't have admin privileges, you can use conda to install emacs
-
-
-```bash
-conda install conda-forge::emacs -y
-```
-
-The `-y` just allows the install to happen with out you being asked again.
-
-
-Recommended (works reliably in Claude Desktop and other clients that do not inherit your virtualenv PATH):
-
-```json
-{
-  "mcpServers": {
-    "NLM-CKN": {
-      "command": "/Users/**[username]**/miniforge3/envs/nlm-ckn-mcp/bin/python",
-      "args": [
-        "-m",
-	"cell_kg_mcp"
-      ]
-    }
-  }
-}
-```
-
-## Two ways to run this server
-
-The **same code** works two completely separate ways, chosen at startup. They do
-not interfere — a Desktop user and a web user can both use it at once.
-
-| | **A. Local (Claude Desktop / Claude Code)** | **B. Web (claude.ai in a browser)** |
-|---|---|---|
-| Who installs what | Each user installs Python + this repo | **Nothing** — just paste a URL |
-| Where the server runs | On the user's own laptop | On a host you set up once (Render, AWS, …) |
-| Transport | stdio (the default) | Streamable HTTP (`MCP_TRANSPORT=http`) |
-| Best for | Developers, a single machine | Non-technical users, many people |
-
-Section **A** is the Claude Desktop config shown above (nothing about it changes).
-Sections **B** below cover the web option.
-
-## Web hosting on Render (for the maintainer)
-
-The web option needs the server running somewhere with a public HTTPS address.
-The repo ships a `render.yaml` blueprint so [Render](https://render.com) can host
-it in a few clicks. (Any host works — Render is just the simplest starting point.
-The identical code can later move to an NIH STRIDES / AWS instance by running it
-with `MCP_TRANSPORT=http`.)
-
-**Cost:** Render's **Free** plan is `$0`, but the server *sleeps* after ~15 min
-idle (the first request afterward takes 30–60s to wake). For always-on, change
-`plan: free` to `plan: starter` (~$7/month) in `render.yaml`. Nothing else changes.
-
-**One-time deploy steps:**
-
-1. Make sure the repo is pushed to GitHub (Render deploys *from* GitHub):
-   ```bash
-   git add render.yaml pyproject.toml src/cell_kg_mcp/server.py
-   git commit -m "Add web (Streamable HTTP) mode + Render blueprint"
-   git push
-   ```
-2. Go to **render.com** → **Get Started** → **Sign in with GitHub** (authorize
-   access to the `NIH-NLM` repositories).
-3. Click **New +** (top-right) → **Blueprint**.
-4. Choose the **`NLM-CKN-MCP`** repository → **Connect**.
-5. Render reads `render.yaml` and shows a service named **`nlm-ckn-mcp`** on the
-   **Free** plan → click **Apply** (or **Create**).
-6. Wait ~2–3 minutes for the first build. The log ends with `Uvicorn running on …`.
-7. At the top of the service page you'll see its address, e.g.
-   `https://nlm-ckn-mcp.onrender.com`.
-8. **The MCP address is that URL with `/mcp` on the end:**
    ```
    https://nlm-ckn-mcp.onrender.com/mcp
    ```
-   Give that `/mcp` URL to your users (next section).
 
-**Check it's live** (optional, from any terminal):
+   → **Add**.
+5. Start a new chat and ask something like:
+
+   > Search Cell-KN for "T cell" and show me the top results.
+
+   > Take CL/0000084 and show me what it's connected to in the graph.
+
+   The first time, Claude asks permission to use the connector — allow it.
+
+**Requirements / good to know:**
+
+- Custom connectors require a **paid Claude plan** (Pro, Team, or Enterprise).
+- On a **Team/Enterprise** organization, an **admin may need to enable custom
+  connectors** before the option appears. If you don't see *Add custom
+  connector*, ask your Claude workspace admin.
+- If a first request seems slow, give it a moment and retry — the server is
+  always-on, but a cold network hop can occasionally lag.
+
+---
+
+## Why go through this server?
+
+The NLM-CKN knowledge graph lives in an ArangoDB database. In principle a
+database can be queried directly, but that is **not** the path we want NIH users
+on, for several reasons:
+
+- **Safety.** This server exposes only a **small, read-only, purpose-built** set
+  of tools — search and graph traversal. There is no way through it to run
+  arbitrary, expensive, or destructive database queries.
+- **No expertise required.** Users don't need to learn the query language or the
+  graph schema. They ask in English; Claude picks the right tool and fills in the
+  arguments.
+- **Stability.** The database layer is still being hardened (the team is moving
+  to a properly separated **public, read-only** interface). Because users go
+  through these fixed MCP tools, that backend work can happen **without changing
+  anything for users** — the tools keep working the same way.
+
+In short: the MCP server is the **supported, safe, stable front door**. Direct
+database access is intentionally not the user path.
+
+---
+
+## What the server provides
+
+Five tools, all read-only:
+
+| Tool | What it does |
+|---|---|
+| `search_cell_kn` | Search Cell-KN (`phenotypes` or `ontologies`) and return compact results. |
+| `get_cell_kn_search_defaults` | Report the default search fields used for each database. |
+| `list_cell_kn_collections` | List the graph collections / ontology prefixes (CL, GO, UBERON, …). |
+| `get_cell_kn_neighbors` | Traverse the graph from one or more node `_id`s to related nodes and links. |
+| `get_cell_kn_node` | Fetch a single node's full record by `_id`. |
+
+Full, always-current API documentation is generated from the code and published
+at **<https://nih-nlm.github.io/NLM-CKN-MCP/>**.
+
+---
+
+## For the maintainer — hosting the server
+
+The browser path above only works because the server is **running somewhere with
+a public HTTPS address**. A web browser cannot launch a local program, so the
+server must be hosted. This repo is set up to make that a few clicks.
+
+### The same code runs two ways
+
+| Mode | How it starts | Used for |
+|---|---|---|
+| **stdio** (default) | `python -m cell_kg_mcp` | Local use in Claude Desktop / Claude Code |
+| **HTTP** (web) | same command, with `MCP_TRANSPORT=http` | Hosted server for claude.ai users |
+
+The switch is the single environment variable `MCP_TRANSPORT`. Nothing else
+differs, and the two modes never interfere.
+
+### Hosting on Render (current)
+
+1. Push the repo to GitHub (Render deploys *from* GitHub).
+2. On **render.com** → **New +** → **Web Service** → connect the `NLM-CKN-MCP`
+   repo.
+3. Set these fields:
+
+   | Field | Value |
+   |---|---|
+   | **Build Command** | `pip install -e .` |
+   | **Start Command** | `python -m cell_kg_mcp` |
+   | **Instance Type** | Starter (always-on) or Free (sleeps when idle) |
+
+4. Add **Environment Variables**:
+
+   | Key | Value | Required? |
+   |---|---|---|
+   | `MCP_TRANSPORT` | `http` | **Yes** — without it the server starts in stdio mode and exits immediately. |
+   | `MCP_ALLOWED_HOSTS` | `nlm-ckn-mcp.onrender.com` | Optional — re-enables Host-header protection scoped to your domain. |
+
+5. Click **Deploy Web Service**. A healthy boot ends with `Uvicorn running on
+   http://0.0.0.0:…` in the log. The MCP address is your service URL **+ `/mcp`**.
+
+**Verify it's live** from any terminal:
 
 ```bash
 curl -sS -X POST https://nlm-ckn-mcp.onrender.com/mcp \
@@ -122,176 +136,92 @@ curl -sS -X POST https://nlm-ckn-mcp.onrender.com/mcp \
 ```
 
 A response containing `"serverInfo":{"name":"cell-kg-search"…}` means it works.
-(On the free plan the very first call after idle may take ~30–60s.)
 
-## Adding the connector in claude.ai (for NIH users — no install)
+### Moving to AWS / STRIDES later
 
-Once the server is hosted and you have its `/mcp` URL, anyone can use it from
-**claude.ai in a browser** — no Python, no config files, no Claude Desktop.
+Render is an interim host. The identical code runs on any always-on host — an NIH
+STRIDES / AWS instance included. To move it: run the server there with
+`MCP_TRANSPORT=http`, set `MCP_ALLOWED_HOSTS` to the new domain, point users at
+the new `/mcp` URL, and retire the Render service. No code changes.
 
-1. Open **[claude.ai](https://claude.ai)** and sign in.
-2. Click your initials (bottom-left) → **Settings**.
-3. Go to **Connectors** → **Add custom connector**.
-4. Give it a name (e.g. `NLM-CKN`) and paste the URL your maintainer gave you:
-   ```
-   https://nlm-ckn-mcp.onrender.com/mcp
-   ```
-   → **Add**.
-5. Start a new chat and ask, for example:
-   > Search Cell-KN for "T cell" and show me the top results.
+---
 
-   The first time, Claude asks permission to use the connector — allow it.
+## For developers — run it locally (Claude Desktop / Claude Code)
 
-**Requirements / gotchas:**
+If you're developing, or prefer the tools on your own machine, run the server in
+its default **stdio** mode and let Claude Desktop launch it.
 
-- Custom connectors require a **paid Claude plan** (Pro, Team, or Enterprise).
-- On a **Team/Enterprise** organization, an **admin may need to enable custom
-  connectors** before the option appears. If you don't see *Add custom connector*,
-  ask your Claude workspace admin.
-- On the **free Render tier**, the first request after the server has been idle
-  takes ~30–60s while it wakes up; later requests are fast. Upgrade to
-  `plan: starter` to remove this.
-
-## What is happening?
+**Install into a conda env:**
 
 ```bash
-You (in Claude Desktop)
-      │  "search for T cells"
-      ▼
-Claude decides to use a tool  ──►  server.py  ──►  client.py  ──►  https://cell-kn.org
-      ◄──────────────────────────  results  ◄──  raw data  ◄──────  (the real website)
-```
- the actual MCP server. It wraps the client and announces tools to Claude:
-
-## The MCP src pattern
-
-This code was supplied by Senior Solutions Engineer, Sangram Sahu and it follows a very common, sensible pattern: 
-
-* separate "what to expose to Claude" from "how to actually talk to the website."
-
-### `client.py` — the part that talks to cell-kn.org
-
-This file knows nothing about MCP or Claude. It's just plain Python that knows how to call the website's search API. 
-If you opened a Python shell, you could use it by hand:
-
-* `CellKgSearchClient` is an object that knows the website address (https://cell-kn.org) and how to build the right search request.
-
-Its search(...) method (client.py:40) does the real work: 
-
-* it cleans up your query, 
-* picks which fields to search, 
-* sends an HTTP POST to /arango_api/search/, 
-* checks for errors, and 
-* returns the results as a list.
-
-`DEFAULT_SEARCH_FIELDS (client.py:8)` is just the canned list of which database columns to search for each database type (phenotypes vs ontologies).
-
-You could reuse this file in a script that has nothing to do with Claude. That's the point of keeping it separate.
-
-### `server.py` — the part that exposes those abilities to Claude
-
-This is the actual MCP server. It wraps the client and announces tools to Claude:
-
-* mcp = FastMCP("cell-kg-search") (server.py:9) creates the server. 
-
-FastMCP is a helper library that handles all the gory MCP protocol details for you.
-
-* The @mcp.tool() decorator is the magic. 
-* Any function with that decorator on top becomes a tool Claude can see and call. 
-
-Sangram exposed two:
-
-* search_cell_kn (server.py:31) — the search itself.
-* get_cell_kn_search_defaults (server.py:60) — tells Claude which fields are searched by default.
-
-The docstring under each function (the """...""" text) is literally what Claude reads to decide when to use the tool. 
-
-The function arguments (query, db, limit...) become the inputs Claude fills in.
-_compact_result (server.py:13) just trims each result down to the useful fields so Claude isn't flooded with junk.
-
-* main() (server.py:66) calls mcp.run(), which starts the server and waits for Claude to talk to it.
-
-### Summarizing
-
-So the rule of thumb: 
-
-* server.py = the menu Claude sees. 
-* client.py = the kitchen that actually cooks.
-
-### How it actually gets launched
-
-You never run this server by double-clicking it. 
-
-Claude Desktop launches it for you. 
-
-That's what the config block in the README does:
-
-"NLM-CKN": {
-  "command": "/Users/**[username]**/miniforge3/envs/nlm-ckn-mcp/bin/python",
-  "args": ["-m", "cell_kg_mcp"]
-}
-
-This tells Claude Desktop: 
-
-* "To start the NLM-CKN tools, run this exact Python with -m cell_kg_mcp." 
-* The -m cell_kg_mcp runs src/cell_kg_mcp/__main__.py, which calls main(), which starts the server. 
-* Claude and the server then talk to each other over the program's input/output pipes (this is the "stdio" transport — the default, no networking involved).
-
-
-That's also why the README is so insistent about the absolute path to Python: 
-
-Claude Desktop doesn't know about your conda environment, so you have to spell out exactly which Python has the mcp and requests libraries installed.
-
-###  What to do to set it up?
-
-Boils down to:
-* Install it into a conda env
-
-```bash
+git clone https://github.com/NIH-NLM/NLM-CKN-MCP.git
+cd NLM-CKN-MCP
 conda env create -f environment.yml
+conda activate nlm-ckn-mcp
 pip install -e .
 ```
 
-* Tell Claude Desktop about it by editing `claude_desktop_config.json` with the `absolute path` to that `env's Python (the JSON block above)`.
-* Restart Claude Desktop. 
+**Tell Claude Desktop about it.** On a Mac the config file is at
+`~/Library/Application Support/Claude/claude_desktop_config.json`. Add:
 
-It launches the server, sees the two tools, and you're done.
+```json
+{
+  "mcpServers": {
+    "NLM-CKN": {
+      "command": "/Users/**[username]**/miniforge3/envs/nlm-ckn-mcp/bin/python",
+      "args": ["-m", "cell_kg_mcp"]
+    }
+  }
+}
+```
 
-Test the plumbing independently with pytest — those tests in test_client.py fake the website and check the client builds the right request, so you can confirm the logic without hitting the network.
+Replace `**[username]**` with your username, and use the **absolute path** to the
+Python inside your conda env — Claude Desktop does not inherit your shell's PATH.
+Find that path with:
 
-### Final note
+```bash
+conda activate nlm-ckn-mcp && python -c "import sys; print(sys.executable)"
+```
 
-Replace [username] with your [username]!
+Then restart Claude Desktop. It launches the server, sees the tools, and you're
+done.
 
-## Notes about the live endpoint
+---
 
-- `https://cell-kn.org/` over HTTPS serves the real app.
-- `http://cell-kn.org/` currently serves a default Apache page.
-- The endpoint requires `search_fields` in the payload.
+## How it works
 
-## Troubleshooting
+This code was supplied by Senior Solutions Engineer **Sangram Sahu** and follows
+a common, sensible pattern: **separate "what to expose to Claude" from "how to
+actually talk to the backend."**
 
-- Error: `Failed to spawn process: No such file or directory`
-  - Cause: client cannot find `cell-kg-mcp` on PATH.
-  - Fix: use the absolute Python command config above.
-- Error sequence: `write EPIPE` right after initialize
-  - Usually a follow-on error because the server process failed to spawn or exited early.
-  - Fix: switch to absolute command + `cwd`, then restart the MCP client.
+- **`client.py` — the kitchen.** Plain Python that knows the backend address and
+  how to call it: it builds the request, sends the HTTP call, checks for errors,
+  and returns results. It knows nothing about MCP or Claude, and could be reused
+  in any script.
+- **`server.py` — the menu.** The MCP server. `mcp = FastMCP("cell-kg-search")`
+  creates it, and each `@mcp.tool()`-decorated function becomes a tool Claude can
+  see and call. The docstring is what Claude reads to decide *when* to use a
+  tool; the function arguments become the inputs Claude fills in. `main()` starts
+  the server — in stdio mode for Desktop, or HTTP mode for web hosting.
+
+Rule of thumb: **`server.py` is the menu Claude sees; `client.py` is the kitchen
+that cooks.**
+
+---
 
 ## Documentation
 
-API documentation is generated automatically from the code's docstrings with
-**Sphinx** (autodoc), following the same model as
-[`oadr-cpep`](https://github.com/NIH-NLM/oadr-cpep). On every push to `main`, the
-`.github/workflows/docs.yml` workflow builds the HTML and publishes it to
-**GitHub Pages**:
+API docs are generated from the code's docstrings with **Sphinx** (autodoc),
+following the same model as
+[`oadr-cpep`](https://github.com/NIH-NLM/oadr-cpep), and published to **GitHub
+Pages** by `.github/workflows/docs.yml` on every push to `main`.
 
 - Published site: <https://nih-nlm.github.io/NLM-CKN-MCP/>
 
-One-time setup (repo admin): in the GitHub repo, go to **Settings → Pages** and
-set **Source: GitHub Actions**. After that, docs rebuild and redeploy on their own.
+**One-time setup (repo admin):** in the GitHub repo, **Settings → Pages** → set
+**Source: GitHub Actions**. After that, docs rebuild and redeploy on their own.
 
-Build the docs locally:
+**Build the docs locally:**
 
 ```bash
 pip install -e .
@@ -300,6 +230,26 @@ sphinx-apidoc -f --separate -o docs/source/ src/cell_kg_mcp
 cd docs && make html
 # open docs/build/html/index.html
 ```
+
+---
+
+## Troubleshooting
+
+- **`Invalid Host header` (HTTP 421)** when hosting.
+  - Cause: the MCP HTTP server's DNS-rebinding protection trusts only
+    `localhost` and rejects the hosting domain.
+  - Fix: this is handled automatically in HTTP mode. To re-enable protection
+    scoped to your domain, set `MCP_ALLOWED_HOSTS` to your host (e.g.
+    `nlm-ckn-mcp.onrender.com`).
+- **`Application exited early`** on a host right after "Build successful."
+  - Cause: `MCP_TRANSPORT=http` is not set, so the server ran in stdio mode and
+    exited with no terminal attached.
+  - Fix: add the `MCP_TRANSPORT=http` environment variable and redeploy.
+- **`Failed to spawn process: No such file or directory`** (Claude Desktop).
+  - Cause: the client can't find the Python on PATH.
+  - Fix: use the **absolute** Python path in `claude_desktop_config.json`.
+
+---
 
 ## Run tests
 
